@@ -1,13 +1,12 @@
 from flask import Flask, request, jsonify
 from telethon import TelegramClient
-from telethon.tl.functions.channels import CreateChannelRequest, ToggleForumRequest
+from telethon.tl.functions.channels import CreateChannelRequest, InviteToChannelRequest, ToggleForumRequest
 from telethon.tl.functions.forums import CreateForumTopicRequest
 
 # 🔑 Данные из my.telegram.org
 api_id = 21334519
 api_hash = "ad90b94b00185c6d9b0341af99121cf2"
 
-# Создаём клиент
 client = TelegramClient("my_session", api_id, api_hash)
 app = Flask(__name__)
 
@@ -16,6 +15,7 @@ def create_group():
     try:
         data = request.json
         title = data.get("title", "Новая супергруппа")
+        users = [str(u).replace("@", "").strip() for u in data.get("users", [])]
         topics = data.get("topics", ["Общий чат", "Вопросы", "Новости"])
 
         async def runner():
@@ -27,25 +27,39 @@ def create_group():
             ))
             channel = created.chats[0]
 
-            # 2. Включаем режим форума (топики)
+            # 2. Добавляем участников (если есть)
+            if users:
+                try:
+                    await client(InviteToChannelRequest(
+                        channel=channel,
+                        users=users
+                    ))
+                except Exception as e:
+                    print("Ошибка при добавлении участников:", e)
+
+            # 3. Включаем режим форума
             await client(ToggleForumRequest(
                 channel=channel,
                 enabled=True
             ))
 
-            # 3. Создаём топики из списка
+            # 4. Создаём топики
             created_topics = []
             for name in topics:
-                topic = await client(CreateForumTopicRequest(
-                    channel=channel,
-                    title=name,
-                    icon_color=7322096  # можно менять цвет
-                ))
-                created_topics.append(name)
+                try:
+                    await client(CreateForumTopicRequest(
+                        channel=channel,
+                        title=name,
+                        icon_color=7322096
+                    ))
+                    created_topics.append(name)
+                except Exception as e:
+                    print(f"Ошибка при создании топика {name}:", e)
 
             return {
                 "chat_id": channel.id,
                 "title": title,
+                "users": users,
                 "topics": created_topics
             }
 
@@ -56,3 +70,4 @@ def create_group():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
