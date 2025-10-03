@@ -8,7 +8,7 @@ import uvicorn
 # 🔑 Укажи свои api_id, api_hash и session
 api_id = 21334519
 api_hash = "ad90b94b00185c6d9b0341af99121cf2"
-session_name = "session_name"
+session_name = "my_session"
 
 # создаём FastAPI
 app = FastAPI()
