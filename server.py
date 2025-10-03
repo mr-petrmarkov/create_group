@@ -1,27 +1,55 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from telethon import TelegramClient
 from telethon.tl.functions.messages import CreateChatRequest
+import asyncio
+import uvicorn
 
+# 🔑 Укажи свои api_id, api_hash и session
 api_id = 21334519
 api_hash = "ad90b94b00185c6d9b0341af99121cf2"
+session_name = "session_name"
 
-client = TelegramClient("my_session", api_id, api_hash)
-client.start()  # запускаем сразу при старте приложения
+# создаём FastAPI
+app = FastAPI()
 
-app = Flask(__name__)
+# создаём Telethon client один раз при старте
+client = TelegramClient(session_name, api_id, api_hash)
 
-@app.route("/create_group", methods=["POST"])
-def create_group():
-    data = request.json
-    title = data.get("title", "Новая группа")
-    users = data.get("users", [])
+@app.on_event("startup")
+async def startup_event():
+    # подключаем клиента при старте приложения
+    await client.start()
 
-    async def runner():
-        return await client(CreateChatRequest(
-            users=users,
-            title=title
-        ))
+@app.post("/create_group")
+async def create_group(request: Request):
+    try:
+        data = await request.json()
+        title = data.get("title")
+        users = data.get("users", [])
 
-    result = client.loop.run_until_complete(runner())
-    return jsonify({"status": "ok", "group": str(result)})
+        if not title or not users:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "title и users обязательны"}
+            )
+
+        # создаём группу
+        result = await client(CreateChatRequest(users=users, title=title))
+
+        return JSONResponse(
+            status_code=200,
+            content={"status": "ok", "chat": str(result)}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+# 🔥 локальный запуск (для отладки)
+if __name__ == "__main__":
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+
+
 
